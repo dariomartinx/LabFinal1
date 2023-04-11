@@ -1,10 +1,12 @@
-#include <stdio.h>
+include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 #include <pthread.h>
 #include <sys/types.h>
 #include <fcntl.h>
+#include <sys/stat.h>
+#include <signal.h>
 
 typedef struct conf{
         char rutaFiles[25];
@@ -19,22 +21,26 @@ typedef struct conf{
 void *funcionThread(void *parametro);
 
 int main(){
-int tuberia[2];
-pipe(tuberia);
-char str[50], *tok, tConf[25];
+char str[50], *tok, tConf[25], str2[80];
 confstruct configuracion;
-if(fork()==0){
-        execv("./Monitor", *argv);
+int fw, pid;
+mkfifo("tuberia", 0666);
+pid = fork();
+
+if(pid==0){
+        execl("./Monitor", "Monitor", "C", "Programming", NULL);
 }
 else{
         FILE *pfich = fopen("fp.conf.txt", "r");                        //Fichero de configuración
         if(pfich == NULL){
-                printf("Error al abrir el fichero de configuración");
-                dup2(tuberia[1],STDOUT_FILENO);
+                fw = open("tuberia", O_WRONLY);
+                strcpy(str2, "Error al abrir el fichero de configuración\n");
+                write(fw, str2, strlen(str2)+1);
         }
         else{
-                printf("Fichero de configuración abierto correctamente");
-                dup2(tuberia[1],STDOUT_FILENO);
+                fw = open("tuberia", O_WRONLY);
+                strcpy(str2, "Fichero de configuración abierto correctamente\n");
+                write(fw, str2, strlen(str2)+1);
                 while(fgets(str,50,pfich)!=NULL){
                         tok = strtok(str, "=");
                         strcpy(tConf,tok);
@@ -43,13 +49,13 @@ else{
                                 strcpy(configuracion.rutaFiles, tok);
                                 configuracion.rutaFiles[strlen(configuracion.rutaFiles)-1]='\0';
                         }
-                        else if(strcmp(tConf,"INVENTORY_FILE")==0){
+			else if(strcmp(tConf,"INVENTORY_FILE")==0){
                                 strcpy(configuracion.invFile, tok);
                                 configuracion.invFile[strlen(configuracion.invFile)-1]='\0';
                         }
                         else if(strcmp(tConf,"LOG_FILE")==0){
                                 strcpy(configuracion.logFile, tok);
-				configuracion.invFile[strlen(configuracion.invFile)-1]='\0';
+                                configuracion.invFile[strlen(configuracion.invFile)-1]='\0';
                         }
                         else if(strcmp(tConf,"LOG_FILE")==0){
                                 strcpy(configuracion.logFile, tok);
@@ -68,7 +74,13 @@ else{
                 }
                 fclose(pfich);
         }
-while(1){}
+        fw = open("tuberia", O_WRONLY);
+        strcpy(str2, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n");
+        write(fw, str2, strlen(str2)+1);
+        sleep(3);
+        system("killall Monitor");
+        close(fw);
+        system("rm tuberia");
 }
 }
 
