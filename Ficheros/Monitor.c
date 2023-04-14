@@ -1,31 +1,65 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <pthread.h>
 
-void* hilo1(void* arg) {
-    printf("Soy el hilo 1\n");
-    pthread_exit(NULL);
-}
+// Definimos la estructura que va a contener la información para cada hilo
+typedef struct {
+    char* filename; // Nombre del archivo a leer
+    int thread_num; // Número del hilo
+} thread_args;
 
-void* hilo2(void* arg) {
-    printf("Soy el hilo 2\n");
-    pthread_exit(NULL);
-}
-
-void* hilo3(void* arg) {
-    printf("Soy el hilo 3\n");
+// Función que se va a ejecutar en cada hilo
+void* read_file(void* args) {
+    thread_args* t_args = (thread_args*) args;
+    char* filename = t_args->filename;
+    int thread_num = t_args->thread_num;
+    
+    printf("Hilo %d: Leyendo archivo %s...\n", thread_num, filename);
+    
+    // Abrimos el archivo en modo lectura
+    FILE* file = fopen(filename, "r");
+    if (file == NULL) {
+        perror("Error al abrir archivo");
+        pthread_exit(NULL);
+    }
+    
+    // Leemos el contenido del archivo
+    char buffer[256];
+    while (fgets(buffer, 256, file)) {
+        printf("Hilo %d: %s", thread_num, buffer);
+    }
+    
+    // Cerramos el archivo
+    fclose(file);
+    
+    printf("Hilo %d: Archivo %s leido con exito.\n", thread_num, filename);
     pthread_exit(NULL);
 }
 
 int main() {
-    pthread_t t1, t2, t3;
-
-    pthread_create(&t1, NULL, hilo1, NULL);
-    pthread_create(&t2, NULL, hilo2, NULL);
-    pthread_create(&t3, NULL, hilo3, NULL);
-
-    pthread_join(t1, NULL);
-    pthread_join(t2, NULL);
-    pthread_join(t3, NULL);
-
+    // Creamos la estructura de argumentos para cada hilo
+    thread_args args[3] = {
+        {"archivo1.txt", 1},
+        {"archivo2.txt", 2},
+        {"archivo3.txt", 3}
+    };
+    
+    // Creamos los hilos
+    pthread_t threads[3];
+    for (int i = 0; i < 3; i++) {
+        int result = pthread_create(&threads[i], NULL, read_file, (void*) &args[i]);
+        if (result != 0) {
+            perror("Error al crear hilo");
+            exit(EXIT_FAILURE);
+        }
+    }
+    
+    // Esperamos a que los hilos terminen
+    for (int i = 0; i < 3; i++) {
+        pthread_join(threads[i], NULL);
+    }
+    
+    printf("Todos los hilos han terminado.\n");
     return 0;
 }
+
