@@ -36,7 +36,7 @@ void* read_file(void* args) {
     pthread_exit(NULL);
 }
 
-int main() {
+int main(int argc, char *argv[]) {
     // Creamos la estructura de argumentos para cada hilo
     thread_args args[3] = {
         {"archivo1.txt", 1},
