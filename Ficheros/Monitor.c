@@ -10,12 +10,9 @@
 int main(){
 char str[80];
 int fr;
-fr = open("tuberia", O_RDONLY);
+
 do{
-        read(fr, str, 80);
-        printf("%s", str);
-        close(fr);
-        fr = open("tuberia", O_RDONLY);
+        
 }while(1);
 }
 
