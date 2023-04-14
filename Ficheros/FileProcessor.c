@@ -21,10 +21,9 @@ typedef struct conf{
 void *funcionThread(void *parametro);
 
 int main(){
-char str[50], *tok, tConf[25], str2[80];
+char str[50], *tok, tConf[25];
 confstruct configuracion;
-int fw, pid;
-mkfifo("tuberia", 0666);
+int pid;
 pid = fork();
 
 if(pid==0){
@@ -33,14 +32,10 @@ if(pid==0){
 else{
         FILE *pfich = fopen("fp.conf.txt", "r");                        //Fichero de configuración
         if(pfich == NULL){
-                fw = open("tuberia", O_WRONLY);
-                strcpy(str2, "Error al abrir el fichero de configuración\n");
-                write(fw, str2, strlen(str2)+1);
+                printf( "Error al abrir el fichero de configuración\n");
         }
         else{
-                fw = open("tuberia", O_WRONLY);
-                strcpy(str2, "Fichero de configuración abierto correctamente\n");
-                write(fw, str2, strlen(str2)+1);
+                printf("Fichero de configuración abierto correctamente\n");
                 while(fgets(str,50,pfich)!=NULL){
                         tok = strtok(str, "=");
                         strcpy(tConf,tok);
@@ -74,13 +69,8 @@ else{
                 }
                 fclose(pfich);
         }
-        fw = open("tuberia", O_WRONLY);
-        strcpy(str2, "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n");
-        write(fw, str2, strlen(str2)+1);
         sleep(3);
         system("killall Monitor");
-        close(fw);
-        system("rm tuberia");
 }
 }
 
