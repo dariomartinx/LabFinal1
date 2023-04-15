@@ -9,10 +9,11 @@
 #include <pthread.h>
 #include <dirent.h>
 #include <sys/ipc.h>
+#include <semaphore.h>
 
 typedef struct conf{
         char rutaFiles[25];
-        char invFile[25];
+        char invFile[35];
         char logFile[25];
         int nProc;
         int simSlpMax;
@@ -28,11 +29,16 @@ typedef struct {
     int thread_num; // Número del hilo
 }thread_args;
 
+sem_t sem1, sem2, sem3;
+
 void* funcionThread(void *args);
 
 int main(){
 char str[50], *tok, tConf[25];
 int interruptor, i, j=0;
+sem_init(&sem1, 0, 1);
+sem_init(&sem2, 0, 1);
+sem_init(&sem3, 0, 1);
 FILE *pfich = fopen("fp.conf.txt", "r");                        //Fichero de configuración
 if(pfich == NULL){
 	printf( "Error al abrir el fichero de configuración\n");
@@ -78,12 +84,12 @@ else{
 	struct dirent *dir;
 	do{
 		//Desde la apertura de la ruta de archivos hasta su cierre es el código que se encarga de asignar una casa de apuesta a cada hilo
+		sem_wait(&sem3);
 		d = opendir(configuracion.rutaFiles);
 		if (d) {
 			while ((dir = readdir(d)) != NULL)
 			{
 				tok = strtok(dir->d_name, "_");
-
 				interruptor = 1;
 				for(i = 0; i < configuracion.nProc; i++){
 					if(strcmp(args[i].filename,tok)==0)
@@ -100,7 +106,7 @@ else{
 			}
 
 			closedir(d);
-
+			sem_post(&sem3);
 		}
 		//Fin de la asignación de las casas de apuestas
 		//Creación de los hilos
@@ -129,11 +135,67 @@ else{
 
 void* funcionThread(void *args) {
 thread_args *t_args = (thread_args*) args;
-char* filename = t_args->filename;
-int num = t_args->thread_num;
+char* filename = t_args->filename, comando[75], ruta[35],rutaBin[35], *tok, name[20], str[250];
+int num = t_args->thread_num, contador;
+FILE *pfich, *pfich2;
 if(strlen(filename)!=0){
-	printf("%d:     %s\n",num ,filename);
-	do{}while(1);
+	do{
+		contador = 0;
+		strcpy(ruta,configuracion.rutaFiles);
+		strcpy(rutaBin,configuracion.rutaBin);
+		sem_wait(&sem3);
+		DIR *d = opendir(configuracion.rutaFiles);
+        	struct dirent *dir;
+        	if(d){
+			while ((dir = readdir(d)) != NULL){
+				strcpy(name,dir->d_name);
+				tok = strtok(dir->d_name, "_");
+				if(strcmp(tok, filename)==0){
+					strcat(ruta,name);
+					sem_wait(&sem2);
+					pfich = fopen(configuracion.invFile, "w");
+					if(pfich == NULL){
+                                               printf( "Error al abrir el fichero consolidado\n");
+                                        }
+					else{
+						printf("Fichero %s abierto correctamente\n", configuracion.invFile);
+						pfich2 = fopen(ruta, "r");
+        	                                if(pfich2 == NULL){
+                	                                printf( "Error al abrir el fichero %s\n",ruta);
+                        	                }
+                                	        else{
+                                        		printf("Fichero %s abierto correctamente\n",ruta);
+       	 						while(fgets(str,250,pfich2)!=NULL){
+	        	        				fprintf(pfich,"%s",str);
+							}
+							fclose(pfich2);
+
+							strcat(rutaBin, name);
+                        				strcpy(comando, "mv ");
+                        				strcat(comando, ruta);
+                        				strcat(comando, " ");
+                        				strcat(comando, rutaBin);
+                        				printf("%s\n", comando);
+                        				system(comando);
+						}
+					}
+					fclose(pfich);
+	                		sem_post(&sem2);
+				}
+			}
+			closedir(d);
+			sem_post(&sem3);
+			sem_wait(&sem1);
+			pfich = fopen(configuracion.logFile, "w");
+			if(pfich == NULL){
+        			printf( "Error al abrir el fichero de log\n");
+			}
+			else{
+				fclose(pfich);
+			}
+			sem_post(&sem1);
+		}
+	}while(1);
 }
 else{
 	pthread_exit(NULL);
