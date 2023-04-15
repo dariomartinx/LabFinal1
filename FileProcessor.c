@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <pthread.h>
 #include <dirent.h>
+#include <sys/ipc.h>
 
 typedef struct conf{
         char rutaFiles[25];
@@ -31,7 +32,7 @@ void* funcionThread(void *args);
 
 int main(){
 char str[50], *tok, tConf[25];
-int interruptor, i;
+int interruptor, i, j=0;
 FILE *pfich = fopen("fp.conf.txt", "r");                        //Fichero de configuración
 if(pfich == NULL){
 	printf( "Error al abrir el fichero de configuración\n");
@@ -104,17 +105,23 @@ else{
 		//Fin de la asignación de las casas de apuestas
 		//Creación de los hilos
 		pthread_t threads[configuracion.nProc];
-		for (int i = 0; i < configuracion.nProc; i++) {
+		for (int i = j; i < configuracion.nProc; i++) {
         		int result = pthread_create(&threads[i], NULL, funcionThread, (void*) &args[i]);
         		if (result != 0) {
             			perror("Error al crear hilo");
             			exit(EXIT_FAILURE);
         		}
     		}
+		j=0;
+		//Espera a que acabe los hilos que no tengan una casa asignada y se cuentan los que si la tienen para no llamarlos otra vez
+		//(He Hecho esto para que si se agrega una nueva casa de apuestas mientras está el programa en ejecución, se le pueda asignar a los hilos libres)
 		for (int i = 0; i < configuracion.nProc; i++) {
-        		pthread_join(threads[i], NULL);
+			if(strlen(args[i].filename)==0)
+        			pthread_join(threads[i], NULL);
+			else
+				j++;
 		}
-	}while(0);
+	}while(1);
 
 }
 }
@@ -124,6 +131,11 @@ void* funcionThread(void *args) {
 thread_args *t_args = (thread_args*) args;
 char* filename = t_args->filename;
 int num = t_args->thread_num;
-printf("%d:     %s\n",num ,filename);
-pthread_exit(NULL);
+if(strlen(filename)!=0){
+	printf("%d:     %s\n",num ,filename);
+	do{}while(1);
+}
+else{
+	pthread_exit(NULL);
+}
 }
