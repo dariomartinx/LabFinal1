@@ -1,4 +1,4 @@
-include <stdio.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
@@ -6,7 +6,8 @@ include <stdio.h>
 #include <sys/types.h>
 #include <fcntl.h>
 #include <sys/stat.h>
-#include <signal.h>
+#include <pthread.h>
+#include <dirent.h>
 
 typedef struct conf{
         char rutaFiles[25];
@@ -16,15 +17,20 @@ typedef struct conf{
         int simSlpMax;
         int simSlpMin;
         char rutaBin[25];
+	int nCasas;
 }confstruct;
+
+typedef struct {
+    char* filename; // Nombre del archivo a leer
+    int thread_num; // Número del hilo
+}thread_args;
 
 void *funcionThread(void *parametro);
 
 int main(){
 char str[50], *tok, tConf[25];
 confstruct configuracion;
-int pid;
-
+int interruptor, i;
 FILE *pfich = fopen("fp.conf.txt", "r");                        //Fichero de configuración
 if(pfich == NULL){
 	printf( "Error al abrir el fichero de configuración\n");
@@ -59,12 +65,41 @@ else{
                 }
         }
         fclose(pfich);
-	pid = fork();
-	if(pid == 0){
-		        execl("./Monitor", "Monitor", "C", "Programming", configuracion.invFile, NULL);	
+	pthread_t threads[configuracion.nProc];
+	thread_args args[configuracion.nProc];
+	for(i=1;i<=configuracion.nProc;i++){
+		args[i-1].filename = "";
+		args[i-1].thread_num = i;
 	}
-}
-sleep(3);
-system("killall Monitor");
-}
 
+	DIR *d;
+	struct dirent *dir;
+	do{
+		d = opendir(configuracion.rutaFiles);
+		if (d) {
+			while ((dir = readdir(d)) != NULL)
+			{
+				tok = strtok(dir->d_name, "_");
+				interruptor = 1;
+				for(i = 0; i < configuracion.nProc; i++){
+					if(strcmp(args[i].filename,tok)==0)
+						interruptor = 0;
+				}
+				if(strcmp(dir->d_name, "..")!=0 && strcmp(dir->d_name, ".")!=0 && interruptor){
+					i=0;
+					while(strlen(args[i].filename)!=0 && i < configuracion.nProc){
+						printf("%d\n",i);
+						i++;
+					};
+					if(i<configuracion.nProc)
+						args[i].filename = tok;
+				}
+			}
+			closedir(d);
+			for(i=0; i<configuracion.nProc;i++)
+				printf("%s\n", args[i].filename);
+		}
+	}while(1);
+
+}
+}
