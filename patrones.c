@@ -12,8 +12,15 @@
 #define ALARMAINCREMENOAPUESTASPORCENTAJE 20
 #define MAXPATRONES 1000
 #define LENGHTMENSAJE 200
+#define NUMPATRONES 1
 
 typedef enum boolean {FALSE, TRUE} tBool;
+
+struct patrones {
+	void ( func)(void *);
+	struct resultPatrones * resultado;
+    char Descripcion[100];
+};
 
 struct resultPatrones {
   int numeroMensajes;
@@ -41,27 +48,38 @@ void *Patron_Incremento_Apuestas_Dia_Worker();
 
 int main()
 {
-	printf("lanzando hilo patron 1\n");
-    pthread_t thPatron1;
-	struct resultPatrones *argsPatron1 = calloc (sizeof (struct resultPatrones), 1);
-    pthread_create(&thPatron1, NULL, Patron_Incremento_Apuestas_Dia_Worker, argsPatron1);
-    pthread_join(thPatron1, NULL);
-	int idTuberia, mensajeLenght;	
+	struct patrones Patrones[NUMPATRONES] = {
+		{&Patron_Incremento_Apuestas_Dia_Worker, calloc (sizeof (struct resultPatrones), 1), "Patron 2"}
+	};
 
-	if (argsPatron1->numeroMensajes > 0)
+	int iPatron;
+	int idTuberia, mensajeLenght;	
+	for(iPatron=0; iPatron < NUMPATRONES; iPatron++)
 	{
-		int iMensaje;
-		idTuberia = open ("/tmp/patronludopata", O_WRONLY);
-		for(iMensaje=0; iMensaje < argsPatron1->numeroMensajes; iMensaje++)
-		{
-			mensajeLenght = strlen (argsPatron1->Mensajes[iMensaje]) + 1;
-			write (idTuberia, argsPatron1->Mensajes[iMensaje], mensajeLenght);
-			sleep(3);
-			printf("Lanzando a tuberia patron detectado: %s \n", argsPatron1->Mensajes[iMensaje]);
-		}			
-		close (idTuberia);	
+		printf("lanzando hilo patron %s\n", Patrones[iPatron].Descripcion);
+		pthread_t thPatron;
+		pthread_create(&thPatron, NULL, Patrones[iPatron].func, Patrones[iPatron].resultado);
+		pthread_join(thPatron, NULL);
 	}
-	
+
+    for(iPatron=0; iPatron < NUMPATRONES; iPatron++)
+	{
+		if (Patrones[iPatron].resultado->numeroMensajes > 0)
+		{
+			int iMensaje;
+			idTuberia = open ("/tmp/patronludopata", O_WRONLY);
+			for(iMensaje=0; iMensaje < Patrones[iPatron].resultado->numeroMensajes; iMensaje++)
+			{
+				mensajeLenght = strlen (Patrones[iPatron].resultado->Mensajes[iMensaje]) + 1;
+				write (idTuberia, Patrones[iPatron].resultado->Mensajes[iMensaje], mensajeLenght);
+				sleep(3);
+				printf("Lanzando a tuberia patron detectado: %s \n", Patrones[iPatron].resultado->Mensajes[iMensaje]);
+			}			
+			close (idTuberia);	
+		}
+	}
+
+
 	printf("fin proceso\n");
 }
 
@@ -222,6 +240,6 @@ void PatronIncrementoPorDia(pApuestas apuestas, int numApuestas, struct resultPa
                 }
                 TotalApuestasDiaAnterior = TotalApuestasDia;
             }
-        }
-    }
+        }
+    }
 }
