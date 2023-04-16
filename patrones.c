@@ -7,7 +7,6 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 
-#define RUTA "Ficheros/FicheroConsolidado.txt"
 #define MAXLINEAFICHERO 125
 #define ALARMAINCREMENOAPUESTASPORCENTAJE 20
 #define MAXPATRONES 1000
@@ -17,11 +16,13 @@
 typedef enum boolean {FALSE, TRUE} tBool;
 
 struct patrones {
-	void ( func)(void *);
+	void* (* func)(void *);
 	struct resultPatrones * resultado;
-    char Descripcion[100];
+	char Descripcion[100];
 	pthread_t thPatron;
 };
+
+char ruta[25];
 
 struct resultPatrones {
   int numeroMensajes;
@@ -49,6 +50,24 @@ void *Patron_Incremento_Apuestas_Dia_Worker();
 
 int main()
 {
+	char str[50], *tok, tConf[25];
+	FILE *pfich = fopen("fp.conf.txt", "r");                        //Fichero de configuración
+	if(pfich == NULL){
+		printf( "Error al abrir el fichero de configuración\n");
+	}
+	else{
+	//Leer del fichero de configuración
+        	while(fgets(str,50,pfich)!=NULL){
+        		tok = strtok(str, "=");
+                	strcpy(tConf,tok);
+                	tok = strtok(NULL,"=");
+                	if(strcmp(tConf,"INVENTORY_FILE")==0){
+	        	        strcpy(ruta, tok);
+                        	ruta[strlen(ruta)-1]='\0';
+                	}
+		}
+		fclose(pfich);
+	}
 	struct patrones Patrones[NUMPATRONES] = {
 		{&Patron_Incremento_Apuestas_Dia_Worker, calloc (sizeof (struct resultPatrones), 1), "Patron 2"}
 	};
@@ -95,7 +114,7 @@ void *Patron_Incremento_Apuestas_Dia_Worker(void *_args) {
     struct resultPatrones *args = (struct resultPatrones *) _args;
 	pApuestas ApuestasConsolidadas;
     int NumeroApuestasConsolidadas = 0;
-    ApuestasConsolidadas=LeerFicheroConsolidado(RUTA, &NumeroApuestasConsolidadas);
+    ApuestasConsolidadas=LeerFicheroConsolidado(ruta, &NumeroApuestasConsolidadas);
     if (ApuestasConsolidadas== NULL) {
         printf("Se ha producido un error al cargar las apuestas consolidadas\n");
         return NULL;
@@ -248,6 +267,6 @@ void PatronIncrementoPorDia(pApuestas apuestas, int numApuestas, struct resultPa
                 }
                 TotalApuestasDiaAnterior = TotalApuestasDia;
             }
-        }
-    }
+        }
+    }
 }
