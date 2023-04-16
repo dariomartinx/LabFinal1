@@ -43,7 +43,9 @@ typedef struct {
     char filename[50]; // Nombre del archivo a leer
     int thread_num; // Número del hilo
 }thread_args;
-
+//El semaforo 3 se encarga de controlar la lectura del directorio de ficheros
+//El semaforo 2 se encarga de controlar la apertora del fichero consolidado
+//El semaforo 1 se encarga de controlar la apertura del fichero de log
 sem_t sem1, sem2, sem3;
 
 //La funcionalidad de las diversas pipes es avisar al resto de hilos del fichero que se va a procesar y que asi no se procese dos veces el mismo
@@ -61,7 +63,7 @@ if(pfich == NULL){
 	printf( "Error al abrir el fichero de configuración\n");
 }
 else{
-
+	//Leer del fichero de configuración
         while(fgets(str,50,pfich)!=NULL){
         	tok = strtok(str, "=");
                 strcpy(tConf,tok);
@@ -90,6 +92,7 @@ else{
                 }
         }
         fclose(pfich);
+	//Fin de leer fp.conf
 	//Inicializar dalos de los hilos
 	thread_args args[configuracion.nProc];
 	for(i=1;i<=configuracion.nProc;i++){
@@ -152,19 +155,22 @@ else{
 void* funcionThread(void *args) {
 thread_args *t_args = (thread_args*) args;
 char* filename = t_args->filename, comando[75], ruta[35],rutaBin[35], *tok, name[20], str[250];
+								   //tiempo de sleep///////////////////////////////////////////////////////////////////////////
 int num = t_args->thread_num, contador, interruptor, interruptor2, sueno = (rand()%(configuracion.simSlpMax+1-configuracion.simSlpMin))+configuracion.simSlpMin;
 FILE *pfich, *pfich2;
 logstruct log;
 time_t now, inicio, fin;
 struct tm *local;
+//Interruptor que se usa para no guardar en el f.consolidado la primera linea de cada fichero(es la distribución de los datos)
 interruptor = 0;
+//Interruptor que se usa para que un hilo no pueda leer 2 ficheros a la vez y tenga que esperar antes el retardo
 interruptor2 = 1;
 contador = 0;
 strcpy(ruta,configuracion.rutaFiles);
 strcpy(rutaBin,configuracion.rutaBin);
 DIR *d;
 struct dirent *dir;
-
+//Código de los hilos con casa de apuestas asignada
 if(strlen(filename)!=0){
 	do{
 		interruptor2 = 1;
@@ -173,28 +179,34 @@ if(strlen(filename)!=0){
 		strcpy(ruta,configuracion.rutaFiles);
 		strcpy(rutaBin,configuracion.rutaBin);
 		sem_wait(&sem3);
+		//Abre directorio
 		d = opendir(configuracion.rutaFiles);
         	if(d){
 			while ((dir = readdir(d)) != NULL && interruptor2){
 				strcpy(name,dir->d_name);
 				tok = strtok(dir->d_name, "_");
+				//Busca fichero de su casa de apuestas
 				if(strcmp(tok, filename)==0){
 					interruptor2 = 0;
 					strcat(ruta,name);
 					sem_wait(&sem2);
+					//Abre consolidado
 					pfich = fopen(configuracion.invFile, "a+");
 					if(pfich == NULL){
                                                printf( "Error al abrir el fichero consolidado\n");
                                         }
 					else{
+						//Abre fichero de la casa
 						pfich2 = fopen(ruta, "r");
         	                                if(pfich2 == NULL){
                 	                                printf( "Error al abrir el fichero %s\n",ruta);
                         	                }
                                 	        else{
 							time(&inicio);
+							//Inicio del procesamiento
 							log.hIn=ctime(&inicio);
 							log.hIn[strlen(log.hIn)-1]='\0';
+							//Pasamos el contenido del fichero de la casa al consolidado
        	 						while(fgets(str,250,pfich2)!=NULL){
 								if(interruptor==1){
 	        	        					fprintf(pfich,"%s",str);
@@ -204,9 +216,11 @@ if(strlen(filename)!=0){
 							}
 							log.num=contador;
 							time(&fin);
+							//Fin del procesamiento
 							log.hFin=ctime(&fin);
 							log.hFin[strlen(log.hFin)-1]='\0';
 							fclose(pfich2);
+							//Creamos el comando para enviar el fichero procesado al fichero de basura
 							strcat(rutaBin, name);
                         				strcpy(comando, "mv ");
                         				strcat(comando, ruta);
@@ -215,6 +229,7 @@ if(strlen(filename)!=0){
                         				system(comando);
 
 							sem_wait(&sem1);
+							//Abrimos logfile
 	                                                pfich2 = fopen(configuracion.logFile, "a+");
         	                                        if(pfich2 == NULL){
                 	                                        printf( "Error al abrir el fichero de log\n");
@@ -251,11 +266,14 @@ if(strlen(filename)!=0){
 	}while(1);
 }
 else{
+//Código para los hilos que no tienen casa de apuesta asignada(todo es igual menos por un par de cosas)
+//No hay bucle(El hilo acaba y tiene que volver a ser llamado por si llega más adelante una nueva casa de apuestas)
 	sem_wait(&sem3);
         d = opendir(configuracion.rutaFiles);
         if(d){
 		while ((dir = readdir(d)) != NULL && interruptor2){
 			strcpy(name,dir->d_name);
+			//Se comprueba que no sea "." o ".." y continua con normalidad ya que este hilo puede procesar cualquier fichero mientras no haya otro hilo procesandolo
 			if(strcmp(dir->d_name,".")!=0 && strcmp(dir->d_name,"..")!=0){
 				interruptor2 = 0;
 				strcat(ruta,name);
