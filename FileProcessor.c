@@ -10,6 +10,7 @@
 #include <dirent.h>
 #include <sys/ipc.h>
 #include <semaphore.h>
+#include <time.h>
 
 typedef struct conf{
         char rutaFiles[25];
@@ -23,6 +24,13 @@ typedef struct conf{
 }confstruct;
 //Lo declaramos globalmente para tener la info del fichero de configuración en todos los hilos
 confstruct configuracion;
+
+typedef struct{
+	int fecha;
+	int hora;
+	int nProc;
+	
+}logstruct;
 
 typedef struct {
     char filename[50]; // Nombre del archivo a leer
@@ -136,10 +144,11 @@ else{
 void* funcionThread(void *args) {
 thread_args *t_args = (thread_args*) args;
 char* filename = t_args->filename, comando[75], ruta[35],rutaBin[35], *tok, name[20], str[250];
-int num = t_args->thread_num, contador;
+int num = t_args->thread_num, contador, interruptor, sueno = (rand()%(configuracion.simSlpMax+1-configuracion.simSlpMin))+configuracion.simSlpMin;
 FILE *pfich, *pfich2;
 if(strlen(filename)!=0){
 	do{
+		interruptor = 0;
 		contador = 0;
 		strcpy(ruta,configuracion.rutaFiles);
 		strcpy(rutaBin,configuracion.rutaBin);
@@ -153,7 +162,7 @@ if(strlen(filename)!=0){
 				if(strcmp(tok, filename)==0){
 					strcat(ruta,name);
 					sem_wait(&sem2);
-					pfich = fopen(configuracion.invFile, "w");
+					pfich = fopen(configuracion.invFile, "a+");
 					if(pfich == NULL){
                                                printf( "Error al abrir el fichero consolidado\n");
                                         }
@@ -166,35 +175,42 @@ if(strlen(filename)!=0){
                                 	        else{
                                         		printf("Fichero %s abierto correctamente\n",ruta);
        	 						while(fgets(str,250,pfich2)!=NULL){
-	        	        				fprintf(pfich,"%s",str);
+								if(interruptor==1){
+	        	        					fprintf(pfich,"%s",str);
+									contador++;
+								}
+								interruptor=1;
 							}
 							fclose(pfich2);
 
 							strcat(rutaBin, name);
                         				strcpy(comando, "mv ");
                         				strcat(comando, ruta);
-                        				strcat(comando, " ");
+							strcat(comando, " ");
                         				strcat(comando, rutaBin);
-                        				printf("%s\n", comando);
                         				system(comando);
 						}
 					}
 					fclose(pfich);
 	                		sem_post(&sem2);
-				}
+
+					sem_wait(&sem1);
+	                        pfich = fopen(configuracion.logFile, "a+");
+        	                if(pfich == NULL){
+                	                printf( "Error al abrir el fichero de log\n");
+                        	}
+	                        else{
+        	                        printf("Fichero %s abierto correctamente\n", configuracion.logFile);
+	
+        	                        fclose(pfich);
+                	        }
+                        	sem_post(&sem1);
+					}
 			}
 			closedir(d);
 			sem_post(&sem3);
-			sem_wait(&sem1);
-			pfich = fopen(configuracion.logFile, "w");
-			if(pfich == NULL){
-        			printf( "Error al abrir el fichero de log\n");
-			}
-			else{
-				fclose(pfich);
-			}
-			sem_post(&sem1);
 		}
+		sleep(sueno);
 	}while(1);
 }
 else{
