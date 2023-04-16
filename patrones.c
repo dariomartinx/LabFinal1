@@ -20,6 +20,7 @@ struct patrones {
 	void ( func)(void *);
 	struct resultPatrones * resultado;
     char Descripcion[100];
+	pthread_t thPatron;
 };
 
 struct resultPatrones {
@@ -54,14 +55,21 @@ int main()
 
 	int iPatron;
 	int idTuberia, mensajeLenght;	
+	
+	//Lanzando hilo patrones
 	for(iPatron=0; iPatron < NUMPATRONES; iPatron++)
 	{
 		printf("lanzando hilo patron %s\n", Patrones[iPatron].Descripcion);
-		pthread_t thPatron;
-		pthread_create(&thPatron, NULL, Patrones[iPatron].func, Patrones[iPatron].resultado);
-		pthread_join(thPatron, NULL);
+		pthread_create(&Patrones[iPatron].thPatron, NULL, Patrones[iPatron].func, Patrones[iPatron].resultado);
 	}
-
+	
+	//Esperando a que terminen los hilos de los patrones
+	for(iPatron=0; iPatron < NUMPATRONES; iPatron++)
+	{
+		pthread_join(Patrones[iPatron].thPatron, NULL);
+	}
+	
+	//Escribiendo en la tuberia los resultados
     for(iPatron=0; iPatron < NUMPATRONES; iPatron++)
 	{
 		if (Patrones[iPatron].resultado->numeroMensajes > 0)
