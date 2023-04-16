@@ -61,7 +61,7 @@ if(pfich == NULL){
 	printf( "Error al abrir el fichero de configuración\n");
 }
 else{
-        printf("Fichero de configuración abierto correctamente\n");
+
         while(fgets(str,50,pfich)!=NULL){
         	tok = strtok(str, "=");
                 strcpy(tConf,tok);
@@ -152,25 +152,34 @@ else{
 void* funcionThread(void *args) {
 thread_args *t_args = (thread_args*) args;
 char* filename = t_args->filename, comando[75], ruta[35],rutaBin[35], *tok, name[20], str[250];
-int num = t_args->thread_num, contador, interruptor, sueno = (rand()%(configuracion.simSlpMax+1-configuracion.simSlpMin))+configuracion.simSlpMin;
+int num = t_args->thread_num, contador, interruptor, interruptor2, sueno = (rand()%(configuracion.simSlpMax+1-configuracion.simSlpMin))+configuracion.simSlpMin;
 FILE *pfich, *pfich2;
 logstruct log;
 time_t now, inicio, fin;
 struct tm *local;
+interruptor = 0;
+interruptor2 = 1;
+contador = 0;
+strcpy(ruta,configuracion.rutaFiles);
+strcpy(rutaBin,configuracion.rutaBin);
+DIR *d;
+struct dirent *dir;
+
 if(strlen(filename)!=0){
 	do{
+		interruptor2 = 1;
 		interruptor = 0;
 		contador = 0;
 		strcpy(ruta,configuracion.rutaFiles);
 		strcpy(rutaBin,configuracion.rutaBin);
 		sem_wait(&sem3);
-		DIR *d = opendir(configuracion.rutaFiles);
-        	struct dirent *dir;
+		d = opendir(configuracion.rutaFiles);
         	if(d){
-			while ((dir = readdir(d)) != NULL){
+			while ((dir = readdir(d)) != NULL && interruptor2){
 				strcpy(name,dir->d_name);
 				tok = strtok(dir->d_name, "_");
 				if(strcmp(tok, filename)==0){
+					interruptor2 = 0;
 					strcat(ruta,name);
 					sem_wait(&sem2);
 					pfich = fopen(configuracion.invFile, "a+");
@@ -178,13 +187,11 @@ if(strlen(filename)!=0){
                                                printf( "Error al abrir el fichero consolidado\n");
                                         }
 					else{
-						printf("Fichero %s abierto correctamente\n", configuracion.invFile);
 						pfich2 = fopen(ruta, "r");
         	                                if(pfich2 == NULL){
                 	                                printf( "Error al abrir el fichero %s\n",ruta);
                         	                }
                                 	        else{
-                                        		printf("Fichero %s abierto correctamente\n",ruta);
 							time(&inicio);
 							log.hIn=ctime(&inicio);
 							log.hIn[strlen(log.hIn)-1]='\0';
@@ -206,35 +213,35 @@ if(strlen(filename)!=0){
 							strcat(comando, " ");
                         				strcat(comando, rutaBin);
                         				system(comando);
+
+							sem_wait(&sem1);
+	                                                pfich2 = fopen(configuracion.logFile, "a+");
+        	                                        if(pfich2 == NULL){
+                	                                        printf( "Error al abrir el fichero de log\n");
+                        	                        }
+                                	                else{
+                                        	                time(&now);
+                                                	        local = localtime(&now);
+                                                        	log.dia = local->tm_mday;
+                                                        	log.mes = local->tm_mon + 1;
+                                                        	log.anio = local->tm_year + 1900;
+                                                        	log.hora = local->tm_hour;
+                                                        	log.min = local->tm_min;
+                                                        	log.seg = local->tm_sec;
+                                                        	log.nProc = getpid();
+                                                        	strcpy(log.file, name);
+                                                        	fprintf(pfich2,"%d/%d/%d;%d:%d:%d;%d;%s;%s;%s;%d\n",log.dia,log.mes,log.anio,log.seg,log.min,log.hora,log.nProc,log.hIn,log.hFin,log.file,log.num);
+                                                        	printf("%d/%d/%d;%d:%d:%d;%d;%s;%s;%s;%d\n",log.dia,log.mes,log.anio,log.seg,log.min,log.hora,log.nProc,log.hIn,log.hFin,log.file,log.num);
+
+                                                        	fclose(pfich2);
+                                                	}
+                                                	sem_post(&sem1);
+
 						}
+						fclose(pfich);
 					}
-					fclose(pfich);
 	                		sem_post(&sem2);
 
-					sem_wait(&sem1);
-	                        	pfich = fopen(configuracion.logFile, "a+");
-        	                	if(pfich == NULL){
-                	        	        printf( "Error al abrir el fichero de log\n");
-                        		}
-	                        	else{
-        	                        	printf("Fichero %s abierto correctamente\n", configuracion.logFile);
-						time(&now);
-						local = localtime(&now);
-						log.dia = local->tm_mday;
-						log.mes = local->tm_mon + 1;
-						log.anio = local->tm_year + 1900;
-						log.hora = local->tm_hour;
-						log.min = local->tm_min;
-						log.seg = local->tm_sec;
-						log.nProc = getpid();
-						strcpy(log.file, name);
-
-						fprintf(pfich,"%d/%d/%d;%d:%d:%d;%d;%s;%s;%s;%d\n",log.dia,log.mes,log.anio,log.seg,log.min,log.hora,log.nProc,log.hIn,log.hFin,log.file,log.num);
-						printf("%d/%d/%d;%d:%d:%d;%d;%s;%s;%s;%d\n",log.dia,log.mes,log.anio,log.seg,log.min,log.hora,log.nProc,log.hIn,log.hFin,log.file,log.num);
-
-        	                        	fclose(pfich);
-                	        	}
-                        		sem_post(&sem1);
 				}
 			}
 			closedir(d);
@@ -244,6 +251,81 @@ if(strlen(filename)!=0){
 	}while(1);
 }
 else{
+	sem_wait(&sem3);
+        d = opendir(configuracion.rutaFiles);
+        if(d){
+		while ((dir = readdir(d)) != NULL && interruptor2){
+			strcpy(name,dir->d_name);
+			if(strcmp(dir->d_name,".")!=0 && strcmp(dir->d_name,"..")!=0){
+				interruptor2 = 0;
+				strcat(ruta,name);
+				sem_wait(&sem2);
+				pfich = fopen(configuracion.invFile, "a+");
+				if(pfich == NULL){
+                                        printf( "Error al abrir el fichero consolidado\n");
+                                }
+				else{
+					pfich2 = fopen(ruta, "r");
+       	                                if(pfich2 == NULL){
+               	                            	printf( "Error al abrir el fichero %s\n",ruta);
+                        	        }
+                                        else{
+						time(&inicio);
+						log.hIn=ctime(&inicio);
+						log.hIn[strlen(log.hIn)-1]='\0';
+       	 					while(fgets(str,250,pfich2)!=NULL){
+							if(interruptor==1){
+	        	        				fprintf(pfich,"%s",str);
+								contador++;
+							}
+							interruptor=1;
+						}
+						log.num=contador;
+						time(&fin);
+						log.hFin=ctime(&fin);
+						log.hFin[strlen(log.hFin)-1]='\0';
+						fclose(pfich2);
+						strcat(rutaBin, name);
+                       				strcpy(comando, "mv ");
+                       				strcat(comando, ruta);
+						strcat(comando, " ");
+                        			strcat(comando, rutaBin);
+                        			system(comando);
+
+						sem_wait(&sem1);
+                                		pfich2 = fopen(configuracion.logFile, "a+");
+                                		if(pfich2 == NULL){
+                                        		printf( "Error al abrir el fichero de log\n");
+                                		}
+                                		else{
+                                        		time(&now);
+                                        		local = localtime(&now);
+                                        		log.dia = local->tm_mday;
+                                        		log.mes = local->tm_mon + 1;
+                                        		log.anio = local->tm_year + 1900;
+                                        		log.hora = local->tm_hour;
+                                        		log.min = local->tm_min;
+                                        		log.seg = local->tm_sec;
+                                        		log.nProc = getpid();
+                                        		strcpy(log.file, name);
+                                        		fprintf(pfich2,"%d/%d/%d;%d:%d:%d;%d;%s;%s;%s;%d\n",log.dia,log.mes,log.anio,log.seg,log.min,log.hora,log.nProc,log.hIn,log.hFin,log.file,log.num);
+                                        		printf("%d/%d/%d;%d:%d:%d;%d;%s;%s;%s;%d\n",log.dia,log.mes,log.anio,log.seg,log.min,log.hora,log.nProc,log.hIn,log.hFin,log.file,log.num);
+
+                                        		fclose(pfich2);
+                                		}
+                                		sem_post(&sem1);
+
+					}
+					fclose(pfich);
+				}
+                		sem_post(&sem2);
+			}
+		}
+		closedir(d);
+		sem_post(&sem3);
+	}
+	sleep(sueno);
+
 	pthread_exit(NULL);
 }
 }
