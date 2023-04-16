@@ -26,10 +26,17 @@ typedef struct conf{
 confstruct configuracion;
 
 typedef struct{
-	int fecha;
+	int dia;
+	int mes;
+	int anio;
+	int min;
+	int seg;
 	int hora;
 	int nProc;
-	
+	char *hIn;
+	char *hFin;
+	char file[25];
+	int num;
 }logstruct;
 
 typedef struct {
@@ -38,6 +45,8 @@ typedef struct {
 }thread_args;
 
 sem_t sem1, sem2, sem3;
+
+//La funcionalidad de las diversas pipes es avisar al resto de hilos del fichero que se va a procesar y que asi no se procese dos veces el mismo
 
 void* funcionThread(void *args);
 
@@ -112,7 +121,6 @@ else{
 						strcpy(args[i].filename,tok);
 				}
 			}
-
 			closedir(d);
 			sem_post(&sem3);
 		}
@@ -146,6 +154,9 @@ thread_args *t_args = (thread_args*) args;
 char* filename = t_args->filename, comando[75], ruta[35],rutaBin[35], *tok, name[20], str[250];
 int num = t_args->thread_num, contador, interruptor, sueno = (rand()%(configuracion.simSlpMax+1-configuracion.simSlpMin))+configuracion.simSlpMin;
 FILE *pfich, *pfich2;
+logstruct log;
+time_t now, inicio, fin;
+struct tm *local;
 if(strlen(filename)!=0){
 	do{
 		interruptor = 0;
@@ -174,6 +185,9 @@ if(strlen(filename)!=0){
                         	                }
                                 	        else{
                                         		printf("Fichero %s abierto correctamente\n",ruta);
+							time(&inicio);
+							log.hIn=ctime(&inicio);
+							log.hIn[strlen(log.hIn)-1]='\0';
        	 						while(fgets(str,250,pfich2)!=NULL){
 								if(interruptor==1){
 	        	        					fprintf(pfich,"%s",str);
@@ -181,8 +195,11 @@ if(strlen(filename)!=0){
 								}
 								interruptor=1;
 							}
+							log.num=contador;
+							time(&fin);
+							log.hFin=ctime(&fin);
+							log.hFin[strlen(log.hFin)-1]='\0';
 							fclose(pfich2);
-
 							strcat(rutaBin, name);
                         				strcpy(comando, "mv ");
                         				strcat(comando, ruta);
@@ -195,17 +212,30 @@ if(strlen(filename)!=0){
 	                		sem_post(&sem2);
 
 					sem_wait(&sem1);
-	                        pfich = fopen(configuracion.logFile, "a+");
-        	                if(pfich == NULL){
-                	                printf( "Error al abrir el fichero de log\n");
-                        	}
-	                        else{
-        	                        printf("Fichero %s abierto correctamente\n", configuracion.logFile);
-	
-        	                        fclose(pfich);
-                	        }
-                        	sem_post(&sem1);
-					}
+	                        	pfich = fopen(configuracion.logFile, "a+");
+        	                	if(pfich == NULL){
+                	        	        printf( "Error al abrir el fichero de log\n");
+                        		}
+	                        	else{
+        	                        	printf("Fichero %s abierto correctamente\n", configuracion.logFile);
+						time(&now);
+						local = localtime(&now);
+						log.dia = local->tm_mday;
+						log.mes = local->tm_mon + 1;
+						log.anio = local->tm_year + 1900;
+						log.hora = local->tm_hour;
+						log.min = local->tm_min;
+						log.seg = local->tm_sec;
+						log.nProc = getpid();
+						strcpy(log.file, name);
+
+						fprintf(pfich,"%d/%d/%d;%d:%d:%d;%d;%s;%s;%s;%d\n",log.dia,log.mes,log.anio,log.seg,log.min,log.hora,log.nProc,log.hIn,log.hFin,log.file,log.num);
+						printf("%d/%d/%d;%d:%d:%d;%d;%s;%s;%s;%d\n",log.dia,log.mes,log.anio,log.seg,log.min,log.hora,log.nProc,log.hIn,log.hFin,log.file,log.num);
+
+        	                        	fclose(pfich);
+                	        	}
+                        		sem_post(&sem1);
+				}
 			}
 			closedir(d);
 			sem_post(&sem3);
